@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS 340 Spell Checker</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 1.5em; }
+    input { padding: 8px; font-size: 1em; width: 60%; }
+    button { padding: 8px 14px; font-size: 1em; cursor: pointer; }
+    #results { margin-top: 24px; }
+    #results h2 { font-size: 1.1em; }
+    .suggestion { padding: 4px 0; }
+    .score { color: #777; }
+  </style>
+</head>
+<body>
+  <h1>Spell Checker</h1>
+  <p>Type a word and click <strong>Check</strong> to see the 10 closest dictionary words.</p>
+
+  <input id="wordInput" type="text" placeholder="type a word" autofocus>
+  <button id="checkBtn">Check</button>
+  <div id="results"></div>
+
+  <!-- The dictionary loads here as a global array named DICTIONARY. -->
+  <script src="dictionary.js"></script>
+
+  <script>
+    // ==================================================================
+    // PROVIDED: helpers and UI wiring. You should not need to edit this.
+    // ==================================================================
+
+    // Returns true if the character is a vowel.
+    function isVowel(ch) {
+      return "aeiou".includes(ch);
+    }
+
+    // Displays a list of { word, score } objects in the results area.
+    function renderSuggestions(list) {
+      const results = document.getElementById("results");
+      if (!list || list.length === 0) {
+        results.innerHTML = "<p>No suggestions yet.</p>";
+        return;
+      }
+      results.innerHTML = "<h2>Suggestions</h2>" + list.map(function (s) {
+        return '<div class="suggestion">' + s.word +
+               ' <span class="score">(' + s.score + ')</span></div>';
+      }).join("");
+    }
+
+    // Wire the button: read the word, get suggestions, display them.
+    document.getElementById("checkBtn").addEventListener("click", function () {
+      const word = document.getElementById("wordInput").value.trim().toLowerCase();
+      if (word.length === 0) return;
+      renderSuggestions(getSuggestions(word));
+    });
+
+    // ==================================================================
+    // YOUR WORK STARTS HERE
+    // ==================================================================
+
+    // PART 1 - Sequence Alignment
+    // Return the minimum alignment PENALTY between word1 and word2 using the
+    // dynamic-programming sequence-alignment algorithm with these penalties:
+    //
+    //     exact match ................................. 0
+    //     consonant/consonant or vowel/vowel mismatch . 1
+    //     vowel/consonant mismatch .................... 3
+    //     gap (insert or delete one letter) ........... 2
+    //
+    // This must run in O(n * m) time, where n and m are the two word lengths.
+    function alignmentScore(word1, word2) {
+      const match = 0; 
+      const cCc = 1;
+      const vCc = 3;
+      const vCv = 1;
+      const gap = 2;
+      // TODO: build the (n+1) x (m+1) table and return the value in the
+      // final (bottom-right) cell.
+      let rows = word1.length +1;
+      let cols = word2.length +1;
+      let matrix = [];
+      for(let i = 0; i < cols; i++){
+        matrix[i] = [];
+        for(let j = 0; j < rows; j++){
+          matrix[i][j] = 0;
+        }
+      }
+      for(let i = 0; i < cols; i++){ // i is vertical in the matrix
+        for(let j = 0; j < rows; j++){ // j is horizontal in the matrix
+          //compare the three options between
+          // taking (adding letter comparison to 1 down - 1 left)
+          if((i != 0) || (j != 0)){
+            let take;
+            if((i - 1 < 0) || (j - 1 < 0)){
+              take = -1;
+            }
+            else{
+              take = matrix[i-1][j-1];
+              if(word1[j-1] == word2[i-1]){
+                take += match;
+              }
+              else{
+                if(isVowel(word1[j-1]) && isVowel(word2[i-1])){
+                  take += vCv;
+                }
+                else if(!isVowel(word1[j-1]) && !isVowel(word2[i-1])){
+                  take += cCc;
+                }
+                else{
+                  take += vCc;
+                }
+              }
+            }
+            // adding a gap (adding gap penalty to either 1 left or 1 down)
+            let gapD;
+            let gapL;
+            if(i - 1 < 0){
+              gapD = -1;
+            }
+            else{
+              gapD = matrix[i-1][j] + gap;
+            }
+            if(j - 1 < 0){
+              gapL = -1;
+            }
+            else{
+              gapL = matrix[i][j-1] + gap;
+            }
+
+
+            // compare the three options
+            let min = -1;
+            if(take != -1){
+              if(take < min || min == -1){
+                min = take;
+              }
+            }
+            if(gapD != -1){
+              if(gapD < min || min == -1){
+                min = gapD;
+              }
+            }
+            if(gapL != -1){
+              if(gapL < min || min == -1){
+                min = gapL;
+              }
+            }
+
+            // min has been found, we can set current node to that
+            matrix[i][j] = min;
+          }
+        }
+      }
+      return matrix[cols-1][rows-1];
+    }
+
+    // PART 2 - Suggestions
+    // Compare the typed word against every word in DICTIONARY using
+    // alignmentScore, then return an array of the 10 entries with the LOWEST
+    // scores. Each entry is an object: { word: "...", score: ... }.
+    // Sort from best (lowest score) to worst, breaking ties alphabetically.
+    function getSuggestions(typedWord) {
+      // TODO: score every dictionary word and return the best 10.
+      let counter = 0;
+      let object = {
+        word: "",
+        score: 0
+      }
+      let stored = []
+      for(let i = 0; i < 10; i++){
+        stored.push({word: "$", score: -1});
+      }
+
+
+      while(counter < 6995){
+        let wordD = DICTIONARY[counter];
+        let penalty = alignmentScore(typedWord.toLowerCase(), wordD);
+        let set = false;
+        for(let i = 0; i < 10; i++){
+          let alphComp = (wordD).localeCompare(stored[i].word);
+          if((penalty < stored[i].score || stored[i].score == -1) && !set){
+            //console.log(wordD, penalty);
+            stored.splice(i, 0, {word: wordD, score: penalty});
+            set = true;
+          }
+          else if(penalty == stored[i].score && alphComp < 0 && !set){
+            //console.log(wordD, penalty);
+            stored.splice(i, 0, {word: wordD, score: penalty});
+            set = true;
+          }
+        }
+        counter++;
+      }
+      //console.log(stored);
+      let finish = [];
+      for(let i = 0; i < 10; i++){
+        finish.push(stored[i]);
+      }
+      return finish;
+    }
+  </script>
+</body>
+</html>
